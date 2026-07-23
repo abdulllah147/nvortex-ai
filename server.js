@@ -11,7 +11,7 @@ const Groq = require('groq-sdk');
 const app = express();
 app.use(cors());
 
-// Image uploads aur base64 data ke liye limit 50mb set ki gayi hai taake request fail na ho
+// Image uploads aur base64 data ke liye limit 50mb set ki gayi hai
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -61,7 +61,7 @@ const dbReady = setupDatabase().catch(err => console.error('Database setup faile
 // Initialize Groq Client
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Groq AI Response Function (Supports both Text and Vision with updated model)
+// Groq AI Response Function (Supports both Text and Vision)
 async function generateWithGroq(promptText, imageBase64 = null, mimeType = null) {
   try {
     const currentDate = new Date().toLocaleString('en-US', { 
@@ -79,7 +79,7 @@ async function generateWithGroq(promptText, imageBase64 = null, mimeType = null)
       { type: "text", text: (promptText || "Describe this image in detail.") + extraContext }
     ];
 
-    let selectedModel = "llama-3.3-70b-versatile"; // Default text model
+    let selectedModel = "llama-3.3-70b-versatile";
 
     if (imageBase64) {
       const dataUrl = `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`;
