@@ -1,44 +1,56 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const express = require('express');
+const mongoose = require('mongoose');
+require('dotenv').config();
 
-// Yeh database ki file khud ba khud 'Server' folder mein ban jayegi
-const dbPath = path.resolve(__dirname, 'database.sqlite');
+const app = express();
+app.use(express.json());
 
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Database connection failed:', err.message);
-    } else {
-        console.log('Connected to SQLite Database successfully!');
+// MongoDB Atlas connection (Vercel environment variable MONGODB_URI se connect hoga)
+const connectDB = async () => {
+    try {
+        const conn = await mongoose.connect(process.env.MONGODB_URI);
+        console.log(`MongoDB Connected: ${conn.connection.host}`);
+    } catch (error) {
+        console.error('Database connection failed:', error.message);
+        process.exit(1);
     }
+};
+
+// 1. User Schema
+const userSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    profile_picture: { type: String },
+    created_at: { type: Date, default: Date.now }
 });
 
-// Tables create karna (Agar pehle se nahi bani)
-db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        profile_picture TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS chats (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        title TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        chat_id INTEGER,
-        role TEXT NOT NULL,
-        text TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
-    )`);
+// 2. Chat Schema
+const chatSchema = new mongoose.Schema({
+    user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    title: { type: String, required: true },
+    created_at: { type: Date, default: Date.now }
 });
 
-module.exports = db;
+// 3. Message Schema
+const messageSchema = new mongoose.Schema({
+    chat_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Chat', required: true },
+    role: { type: String, required: true },
+    text: { type: String, required: true },
+    created_at: { type: Date, default: Date.now }
+});
+
+const User = mongoose.model('User', userSchema);
+const Chat = mongoose.model('Chat', chatSchema);
+const Message = mongoose.model('Message', messageSchema);
+
+// Server start aur Database connection
+const PORT = process.env.PORT || 5000;
+
+connectDB().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+    });
+});
+
+module.exports = app;
