@@ -18,10 +18,10 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 let db;
 const JWT_SECRET = process.env.JWT_SECRET || 'apna_super_secret_key_123';
 
-// Initialize SQLite Database
+// Initialize SQLite Database (In-Memory for Vercel Serverless compatibility)
 async function setupDatabase() {
   db = await open({
-    filename: './database.sqlite',
+    filename: ':memory:',
     driver: sqlite3.Database
   });
 
@@ -52,10 +52,11 @@ async function setupDatabase() {
     );
   `);
 
-  console.log('Connected to Local SQLite Database with Auth (database.sqlite)');
+  console.log('Connected to In-Memory SQLite Database with Auth');
 }
 
-setupDatabase().catch(err => console.error('Database setup failed:', err));
+// Ensure DB is setup before handling requests
+const dbReady = setupDatabase().catch(err => console.error('Database setup failed:', err));
 
 // Initialize Groq Client
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -86,7 +87,6 @@ async function generateWithGroq(promptText, imageBase64 = null, mimeType = null)
         type: "image_url",
         image_url: { url: dataUrl }
       });
-      // Updated active vision model on Groq
       selectedModel = "llama-3.2-90b-vision-preview"; 
     }
 
@@ -114,9 +114,14 @@ async function generateWithGroq(promptText, imageBase64 = null, mimeType = null)
   }
 }
 
+// Middleware to ensure DB is ready
+app.use(async (req, res, next) => {
+  await dbReady;
+  next();
+});
+
 // --- AUTHENTICATION ROUTES ---
 
-// 1. Signup Route
 app.post('/api/auth/signup', async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -142,7 +147,6 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-// 2. Login Route
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -173,10 +177,8 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-
 // --- CHAT ROUTES ---
 
-// Get all chats for a specific user
 app.get('/api/chats/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -188,7 +190,6 @@ app.get('/api/chats/:userId', async (req, res) => {
   }
 });
 
-// Get messages for a specific chat
 app.get('/api/chats/messages/:chatId', async (req, res) => {
   try {
     const { chatId } = req.params;
@@ -200,7 +201,6 @@ app.get('/api/chats/messages/:chatId', async (req, res) => {
   }
 });
 
-// Create a new chat session
 app.post('/api/chats/create', async (req, res) => {
   try {
     const { userId, title } = req.body;
@@ -215,7 +215,6 @@ app.post('/api/chats/create', async (req, res) => {
   }
 });
 
-// Rename Chat Title
 app.put('/api/chats/rename/:chatId', async (req, res) => {
   try {
     const { chatId } = req.params;
@@ -228,7 +227,6 @@ app.put('/api/chats/rename/:chatId', async (req, res) => {
   }
 });
 
-// Delete Chat and its messages
 app.delete('/api/chats/:chatId', async (req, res) => {
   try {
     const { chatId } = req.params;
@@ -241,7 +239,6 @@ app.delete('/api/chats/:chatId', async (req, res) => {
   }
 });
 
-// Handle incoming message (with optional Image/Vision support), call Groq, and save conversation
 app.post('/api/chats/message', async (req, res) => {
   try {
     const { chatId, text, imageBase64, mimeType } = req.body;
@@ -250,14 +247,11 @@ app.post('/api/chats/message', async (req, res) => {
       return res.status(400).json({ error: 'chatId and text or image are required' });
     }
 
-    // Save User Message text to DB
     const userMessageText = text ? (imageBase64 ? `${text} [Image Uploaded]` : text) : '[Image Uploaded]';
     await db.run('INSERT INTO messages (chat_id, role, text) VALUES (?, ?, ?)', [chatId, 'user', userMessageText]);
 
-    // Call Groq API (Passing imageBase64 and mimeType if present)
     const aiReply = await generateWithGroq(text, imageBase64, mimeType);
 
-    // Save Assistant Response to DB
     await db.run('INSERT INTO messages (chat_id, role, text) VALUES (?, ?, ?)', [chatId, 'assistant', aiReply]);
 
     res.json({ reply: aiReply });
@@ -273,7 +267,7 @@ const PORT = process.env.PORT || 5000;
 
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {
-    console.log(`Server with Auth & Vision (50MB Limit) is running on port ${PORT}`);
+    console.log(`Server running locally on port ${PORT}`);
   });
 }
 
