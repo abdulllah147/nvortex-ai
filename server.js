@@ -268,8 +268,13 @@ app.post('/api/chats/message', async (req, res) => {
   }
 });
 
-// Start Server using PORT from .env
+// Start Server locally or export for Vercel Serverless
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server with Auth & Vision (50MB Limit) is running on port ${PORT}`);
-});
+
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`Server with Auth & Vision (50MB Limit) is running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
